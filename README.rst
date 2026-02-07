@@ -67,8 +67,24 @@ API Gateway (Private REST API) をカスタムドメインで構築
   Parameters:
     HostedZoneId: パブリックホストゾーンID
     Fqdn: APIGatwayカスタムドメイン名
-    DeploymentTrigger: v1
+    DeploymentTrigger: V1
+    StageVersion: V1
   EOF
+
+.. note::
+
+  * `DeploymentTrigger` は以下のように追加していくこと
+  * 追加する毎にデプロイされていく
+
+.. code-block::
+
+  DeploymentTrigger: V1,
+    V2,
+    V3
+
+.. note::
+
+  * `StageVersion` はステージに紐づけるデプロイのバージョンとすること
 
 2. スタックデプロイ
 ---------------------------------------------------------------------
