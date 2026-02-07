@@ -124,6 +124,11 @@ Mappings:
       SgName: Ec2Sg
       SubnetName: ClientPublicASubnet
       Name: client
+  ### VPC Interface Endpoints
+  InterfaceEpParams:
+    ExecuteApi:
+      Name: execute-api
+      DnsEnable: true
   ### API Gateway
   ApiParams:
     Stage:
@@ -492,6 +497,29 @@ Resources:
       Tags:
         - Key: Name
           Value: !FindInMap [Ec2Params, Client, Name]
+
+  ############################################################
+  # VPC Interface Endpoints
+  ############################################################
+  "Fn::ForEach::VPCInterfaceEndpoins":
+    - InterfaceEpVariable
+    - - ExecuteApi
+    - ${InterfaceEpVariable}VpcEp:
+        Type: AWS::EC2::VPCEndpoint
+        Properties:
+          VpcEndpointType: Interface
+          ServiceName: !Sub
+            - com.amazonaws.${AWS::Region}.${service_name}
+            - service_name: !FindInMap
+                - InterfaceEpParams
+                - !Ref InterfaceEpVariable
+                - Name
+          VpcId: !Ref ClientVpc
+          SubnetIds:
+            - !Ref ClientPrivateASubnet
+          SecurityGroupIds:
+            - !Ref VpcEndpointSg
+          PrivateDnsEnabled: !FindInMap [InterfaceEpParams, !Ref InterfaceEpVariable, DnsEnable]
 
   ############################################################
   # ALB
