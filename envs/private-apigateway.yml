@@ -1,0 +1,665 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: "Organize Private REST API Gatway Custom Domain"
+
+Transform: 
+  - "AWS::LanguageExtensions"
+
+# ╔═══════════════════════════════════════════════════════════════════════════════════════════════╗
+# ║ Metadata                                                                                      ║
+# ╠═════════════════════╤═════════════════════════════════════════════════════════════════════════╣
+# ╚═════════════════════╧═════════════════════════════════════════════════════════════════════════╝
+Metadata: 
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Domain Settings
+        Parameters:
+          - HostedZoneId
+          - Fqdn
+      - Label:
+          default: API Gatway Settings
+        Parameters:
+          - DeploymentTrigger
+      - Label:
+          default: EC2 Settings
+        Parameters:
+          - LatestAmiId
+
+# ╔═══════════════════════════════════════════════════════════════════════════════════════════════╗
+# ║ Parameters                                                                                    ║
+# ╠═════════════════════╤═════════════════════════════════════════════════════════════════════════╣
+# ╚═════════════════════╧═════════════════════════════════════════════════════════════════════════╝
+Parameters: 
+  HostedZoneId:
+    Description: Public Hosted Zone ID
+    Type: String
+  Fqdn:
+    Description: API Gateway Custom Domain Name
+    Type: String
+  DeploymentTrigger:
+    Description: Change this value to force API redeployment
+    Type: String
+    Default: v1
+  LatestAmiId:
+    Description: Latest Amazon Linux 2023 AMI ID.
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+
+# ╔═══════════════════════════════════════════════════════════════════════════════════════════════╗
+# ║ Mappings                                                                                      ║
+# ╠═════════════════════╤═════════════════════════════════════════════════════════════════════════╣
+# ╚═════════════════════╧═════════════════════════════════════════════════════════════════════════╝
+Mappings:
+  ### VPC
+  VpcParams:
+    Client:
+      Name: client-vpc
+      Cidr: 192.168.0.0/16
+      Tenancy: default
+      DnsHost: true
+      DnsSupport: true
+    System:
+      Name: system-vpc
+      Cidr: 172.16.0.0/16
+      Tenancy: default
+      DnsHost: true
+      DnsSupport: true
+  ### Subnet
+  SubnetParams:
+    ClientPublicA:
+      Name: client-public-a
+      Az: a
+      Cidr: 192.168.1.0/24
+      Public: true
+      VpcName: ClientVpc
+    ClientPrivateA:
+      Name: client-private-a
+      Az: a
+      Cidr: 192.168.2.0/24
+      Public: true
+      VpcName: ClientVpc
+    SystemAlbPrivateA:
+      Name: system-alb-private-a
+      Az: a
+      Cidr: 172.16.1.0/24
+      Public: false
+      VpcName: SystemVpc
+    SystemAlbPrivateC:
+      Name: system-alb-private-c
+      Az: c
+      Cidr: 172.16.2.0/24
+      Public: false
+      VpcName: SystemVpc
+  ### Elastic IP
+  EipParams:
+    Ec2:
+      Name: ec2-eip
+  ### Security Group
+  SgParams:
+    Ec2:
+      Name: ec2-sg
+      Description: For EC2 SG
+      VpcName: ClientVpc
+    VpcEndpoint:
+      Name: ep-executeapi-sg
+      Description: For VPC Interface Endpoints Execution API SG
+      VpcName: ClientVpc
+    Alb:
+      Name: alb-sg
+      Description: For ALB SG
+      VpcName: SystemVpc
+    VpcLink:
+      Name: vpc-link-sg
+      Description: For VPC Link SG
+      VpcName: SystemVpc
+  ### EC2
+  Ec2Params:
+    Client:
+      DeviceName: /dev/xvda
+      RootVolumeSize: 50
+      AmiId: LatestAmiId
+      InstanceType: t3.large
+      KeyPairName: KeyPair
+      SgName: Ec2Sg
+      SubnetName: ClientPublicASubnet
+      Name: client
+  ### API Gateway
+  ApiParams:
+    Stage:
+      Name: prod
+
+# ╔═══════════════════════════════════════════════════════════════════════════════════════════════╗
+# ║ Conditions                                                                                    ║
+# ╠═════════════════════╤═════════════════════════════════════════════════════════════════════════╣
+# ╚═════════════════════╧═════════════════════════════════════════════════════════════════════════╝
+# Conditions: 
+
+# ╔═══════════════════════════════════════════════════════════════════════════════════════════════╗
+# ║ Resources                                                                                     ║
+# ╠═════════════════════╤═════════════════════════════════════════════════════════════════════════╣
+# ╚═════════════════════╧═════════════════════════════════════════════════════════════════════════╝
+Resources:
+  ############################################################
+  # VPC
+  ############################################################ 
+  "Fn::ForEach::Vpc":
+    - VpcVariable
+    - - Client
+      - System
+    - ${VpcVariable}Vpc:
+        Type: AWS::EC2::VPC
+        Properties:
+          CidrBlock: !FindInMap [VpcParams, !Ref VpcVariable, Cidr]
+          EnableDnsHostnames: !FindInMap [VpcParams, !Ref VpcVariable, DnsHost]
+          EnableDnsSupport: !FindInMap [VpcParams, !Ref VpcVariable, DnsSupport]
+          InstanceTenancy: !FindInMap [VpcParams, !Ref VpcVariable, Tenancy]
+          Tags:
+            - Key: Name
+              Value: !FindInMap [VpcParams, !Ref VpcVariable, Name]
+
+  ############################################################
+  # Subnet
+  ############################################################ 
+  "Fn::ForEach::Subnet":
+    - SubnetVariable
+    - - ClientPublicA
+      - ClientPrivateA
+      - SystemAlbPrivateA
+      - SystemAlbPrivateC
+    - ${SubnetVariable}Subnet:
+        Type: AWS::EC2::Subnet
+        Properties:
+          VpcId: !Ref
+            "Fn::FindInMap": [SubnetParams, !Ref SubnetVariable, VpcName]
+          CidrBlock: !FindInMap [SubnetParams, !Ref SubnetVariable, Cidr]
+          AvailabilityZone: !Sub
+            - "${AWS::Region}${Az}"
+            - Az: !FindInMap [SubnetParams, !Ref SubnetVariable, Az]
+          MapPublicIpOnLaunch: !FindInMap [SubnetParams, !Ref SubnetVariable, Public]
+          Tags:
+            - Key: Name
+              Value: !FindInMap [SubnetParams, !Ref SubnetVariable, Name]
+
+  ############################################################
+  # Network ACL
+  ############################################################ 
+  NaclClient:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref ClientVpc
+      Tags:
+        - Key: Name
+          Value: client-nacl
+  
+  NaclClientIngressAll:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref NaclClient
+      RuleNumber: 100
+      Egress: false
+      Protocol: -1
+      RuleAction: allow
+      CidrBlock: 0.0.0.0/0
+
+  NaclClientEgressAll:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref NaclClient
+      RuleNumber: 100
+      Egress: true
+      Protocol: -1
+      RuleAction: allow
+      CidrBlock: 0.0.0.0/0
+
+  "Fn::ForEach::NaclClientAssoc":
+    - AssocVariable
+    - - ClientPublicASubnet
+      - ClientPrivateASubnet
+    - ${AssocVariable}NaclAssoc:
+        Type: AWS::EC2::SubnetNetworkAclAssociation
+        Properties:
+          NetworkAclId: !Ref NaclClient
+          SubnetId: !GetAtt
+            - !Ref AssocVariable
+            - SubnetId
+
+  NaclSystem:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref SystemVpc
+      Tags:
+        - Key: Name
+          Value: system-nacl
+  
+  NaclSystemIngressAll:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref NaclSystem
+      RuleNumber: 100
+      Egress: false
+      Protocol: -1
+      RuleAction: allow
+      CidrBlock: 0.0.0.0/0
+
+  NaclSystemEgressAll:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref NaclSystem
+      RuleNumber: 100
+      Egress: true
+      Protocol: -1
+      RuleAction: allow
+      CidrBlock: 0.0.0.0/0
+
+  "Fn::ForEach::NaclSystemAssoc":
+    - AssocVariable
+    - - SystemAlbPrivateASubnet
+      - SystemAlbPrivateCSubnet
+    - ${AssocVariable}NaclAssoc:
+        Type: AWS::EC2::SubnetNetworkAclAssociation
+        Properties:
+          NetworkAclId: !Ref NaclSystem
+          SubnetId: !GetAtt
+            - !Ref AssocVariable
+            - SubnetId
+
+  ############################################################
+  # Elastic IP
+  ############################################################ 
+  "Fn::ForEach::Eip":
+    - EipVariable
+    - - Ec2
+    - ${EipVariable}Eip:
+        Type: AWS::EC2::EIP
+        Properties:
+          Tags:
+            - Key: Name
+              Value: !FindInMap [EipParams, !Ref EipVariable, Name]
+
+  ############################################################
+  # Internet Gateway
+  ############################################################
+  Igw:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: igw
+
+  IgwAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref Igw
+      VpcId: !Ref ClientVpc
+      
+  ############################################################
+  # Route Table
+  ############################################################ 
+  ClientPublicSubnetRtb:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ClientVpc
+      Tags:
+        - Key: Name
+          Value: client-public-subnet-rtb
+
+  ClientPrivateSubnetRtb:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ClientVpc
+      Tags:
+        - Key: Name
+          Value: client-private-subnet-rtb
+
+  ClientPublicSubnetRtbRouteIgw:
+    Type: AWS::EC2::Route
+    DependsOn:
+      - IgwAttach
+    Properties:
+      RouteTableId: !Ref ClientPublicSubnetRtb
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref Igw
+
+  ClientPublicSubnetRtbAssocPublicA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref ClientPublicSubnetRtb
+      SubnetId: !Ref ClientPublicASubnet
+
+  ClientPrivateSubnetRtbAssocPrivateA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref ClientPrivateSubnetRtb
+      SubnetId: !Ref ClientPrivateASubnet
+
+  SystemAlbSubnetRtb:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SystemVpc
+      Tags:
+        - Key: Name
+          Value: system-alb-subnet-rtb
+
+  SystemAlbSubnetRtbAssocPrivateA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref SystemAlbSubnetRtb
+      SubnetId: !Ref SystemAlbPrivateASubnet
+
+  SystemAlbSubnetRtbAssocPrivateC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref SystemAlbSubnetRtb
+      SubnetId: !Ref SystemAlbPrivateCSubnet  
+
+  ############################################################
+  # KeyPair
+  ############################################################ 
+  KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: client-keypair
+      KeyType: ed25519
+      KeyFormat: pem
+      Tags:
+        - Key: Name
+          Value: client-keypair
+
+  ############################################################
+  # Security Group
+  ############################################################ 
+  "Fn::ForEach::SecurityGroup":
+    - SgVariable
+    - - Ec2
+      - VpcLink
+    - ${SgVariable}Sg:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+          VpcId: !Ref
+            "Fn::FindInMap": [SgParams, !Ref SgVariable, VpcName]
+          GroupName: !FindInMap [SgParams, !Ref SgVariable, Name]
+          GroupDescription: !FindInMap [SgParams, !Ref SgVariable, Description]
+          Tags:
+            - Key: Name
+              Value: !FindInMap [SgParams, !Ref SgVariable, Name]
+
+  "Fn::ForEach::SecurityGroupRemoveDefaultOutBound":
+    - SgVariable
+    - - VpcEndpoint
+      - Alb
+    - ${SgVariable}Sg:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+          VpcId: !Ref
+            "Fn::FindInMap": [SgParams, !Ref SgVariable, VpcName]
+          GroupName: !FindInMap [SgParams, !Ref SgVariable, Name]
+          GroupDescription: !FindInMap [SgParams, !Ref SgVariable, Description]
+          SecurityGroupEgress:
+            - CidrIp: 127.0.0.1/32
+              IpProtocol: "-1"
+          Tags:
+            - Key: Name
+              Value: !FindInMap [SgParams, !Ref SgVariable, Name]
+
+  VpcEndpointSgIngressHttps:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: "tcp"
+      SourceSecurityGroupId: !Ref Ec2Sg
+      FromPort: 443
+      ToPort: 443
+      Description: "Allow HTTPS From EC2 SG"
+      GroupId: !Ref VpcEndpointSg
+
+  AlbSgIngressHttp:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: "tcp"
+      SourceSecurityGroupId: !Ref VpcLinkSg
+      FromPort: 80
+      ToPort: 80
+      Description: "Allow HTTP From VPC Link SG"
+      GroupId: !Ref AlbSg
+
+  ############################################################
+  # IAM Role
+  ############################################################
+  Ec2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: For EC2 Role
+      RoleName: iam-role-ec2
+      AssumeRolePolicyDocument:
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": "ec2.amazonaws.com"
+                    },
+                    "Action": "sts:AssumeRole"
+                }
+            ]
+        }
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      Tags:
+        - Key: Name
+          Value: iam-role-ec2
+
+  ############################################################
+  # Instance Profile
+  ############################################################
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Ref Ec2Role
+      Roles:
+        - !Ref Ec2Role
+
+  ############################################################
+  # EC2
+  ############################################################
+  Client:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - ClientPublicSubnetRtbRouteIgw
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: !FindInMap [Ec2Params, Client, DeviceName]
+          Ebs:
+            DeleteOnTermination: true
+            Encrypted: true
+            VolumeSize: !FindInMap [Ec2Params, Client, RootVolumeSize]
+            VolumeType: gp3
+      DisableApiTermination: false
+      EbsOptimized: true
+      IamInstanceProfile: !Ref InstanceProfile
+      ImageId: !Ref
+        "Fn::FindInMap": [Ec2Params, Client, AmiId]
+      InstanceType: !FindInMap [Ec2Params, Client, InstanceType]
+      KeyName: !Ref
+        "Fn::FindInMap": [Ec2Params, Client, KeyPairName]
+      SecurityGroupIds:
+        - !Ref
+          "Fn::FindInMap": [Ec2Params, Client, SgName]
+      SubnetId: !Ref
+        "Fn::FindInMap": [Ec2Params, Client, SubnetName]
+      MetadataOptions:
+        HttpTokens: required
+      Tags:
+        - Key: Name
+          Value: !FindInMap [Ec2Params, Client, Name]
+
+  ############################################################
+  # ALB
+  ############################################################
+  Alb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: private-alb
+      Type: application
+      Scheme: internal
+      IpAddressType: ipv4
+      LoadBalancerAttributes:
+        - Key: deletion_protection.enabled
+          Value: false
+        - Key: idle_timeout.timeout_seconds
+          Value: 150
+        - Key: access_logs.s3.enabled
+          Value: false
+      SecurityGroups:
+        - !Ref AlbSg
+      Subnets:
+        - !Ref SystemAlbPrivateASubnet
+        - !Ref SystemAlbPrivateCSubnet
+      Tags:
+        - Key: Name
+          Value: private-alb
+
+  ############################################################
+  # Listener
+  ############################################################
+  Http80Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      Protocol: HTTP
+      Port: 80
+      LoadBalancerArn: !Ref Alb
+      DefaultActions:
+        - Type: fixed-response
+          FixedResponseConfig:
+            ContentType: "text/plain"
+            MessageBody: "Forbidden..."
+            StatusCode: "403"
+
+  ############################################################
+  # Listener Rule
+  ############################################################
+  ListenerRuleHostHeader:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Priority: 1
+      ListenerArn: !Ref Http80Listener
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Ref Fqdn
+      Actions:
+        - Type: fixed-response
+          FixedResponseConfig:
+            ContentType: "text/plain"
+            MessageBody: "Success!!"
+            StatusCode: "200"
+
+  ############################################################
+  # VPC Link V2
+  ############################################################
+  VpcLinkV2:
+    Type: AWS::ApiGatewayV2::VpcLink
+    Properties:
+      Name: vpc-link-v2
+      SubnetIds:
+        - !Ref SystemAlbPrivateASubnet
+        - !Ref SystemAlbPrivateCSubnet
+      SecurityGroupIds:
+        - !Ref VpcLinkSg
+      Tags:
+        Name: vpc-link-v2
+
+#   ############################################################
+#   # API Gateway
+#   ############################################################
+#   RestApi:
+#     Type: AWS::ApiGateway::RestApi
+#     Properties:
+#       Name: rest-api
+#       Description: Test Rest API (Any)
+#       EndpointConfiguration:
+#         IpAddressType: ipv4
+#         Types:
+#           - REGIONAL
+#       SecurityPolicy: SecurityPolicy_TLS13_1_3_2025_09
+#       EndpointAccessMode: STRICT # or BASIC
+#       ApiKeySourceType: HEADER # X-API-Key
+#       DisableExecuteApiEndpoint: true
+#       Policy:
+#         {
+#           "Version": "2012-10-17",
+#           "Statement": [
+#             {
+#               "Effect": "Allow",
+#               "Principal": "*",
+#               "Action": "execute-api:Invoke",
+#               "Resource": ["execute-api:/*"],
+#               "Condition": {
+#                 "IpAddress": {
+#                   "aws:SourceIp": !Ref AccessIp
+#                 }
+#               }
+#             }
+#           ]
+#         }
+#       Tags:
+#         - Key: Name
+#           Value: rest-api
+
+#   ############################################################
+#   # Resource - Any Path
+#   ############################################################
+#   ApiResource:
+#     Type: AWS::ApiGateway::Resource
+#     Properties:
+#       RestApiId: !Ref RestApi
+#       ParentId: !GetAtt RestApi.RootResourceId
+#       PathPart: "{proxy+}"
+
+#   ############################################################
+#   # Method - VPC Link
+#   ############################################################
+
+#   ############################################################
+#   # Deployment
+#   ############################################################
+
+#   ############################################################
+#   # ACM
+#   ############################################################
+#   ApiCertificate:
+#     Type: AWS::CertificateManager::Certificate
+#     Properties:
+#       DomainName: !Ref Fqdn
+#       KeyAlgorithm: EC_prime256v1
+#       ValidationMethod: DNS
+#       DomainValidationOptions:
+#         - DomainName: !Ref Fqdn
+#           HostedZoneId: !Ref HostedZoneId
+#       Tags:
+#         - Key: Name
+#           Value: !Ref Fqdn
+
+#   ############################################################
+#   # Custom Domain
+#   ############################################################
+
+#   ############################################################
+#   # Record
+#   ############################################################
+
+# ╔═══════════════════════════════════════════════════════════════════════════════════════════════╗
+# ║ Outputs                                                                                       ║
+# ╠═════════════════════╤═════════════════════════════════════════════════════════════════════════╣
+# ╚═════════════════════╧═════════════════════════════════════════════════════════════════════════╝
+Outputs:
+  GetKeyPairCommand:
+    Description: Get KeyPair Secret Key from SSM Parameter Store.
+    Value: !Sub 'aws ssm get-parameter --name "/ec2/keypair/${KeyPair.KeyPairId}:1" --region ${AWS::Region} --with-decryption --query Parameter.Value --output text --profile admin > keypair.pem && chmod 400 keypair.pem'
+    Export:
+      Name: get-keypair-command
+  SshCommand:
+    Description: SSH Command Bypass Systems Manager Session Manager
+    Value: !Sub 'ssh -i keypair.pem ec2-user@${Client}'
+    Export:
+      Name: ssh-command
