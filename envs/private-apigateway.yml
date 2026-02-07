@@ -824,9 +824,34 @@ Resources:
         - Key: Name
           Value: domain-association-vpcendpoints
 
-#   ############################################################
-#   # Record
-#   ############################################################
+  ############################################################
+  # Record
+  ############################################################
+  ApiDomainRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref Fqdn
+      Type: A
+      AliasTarget:
+        HostedZoneId: !Select 
+          - "0"
+          - !Split 
+            - ":"
+            - !Select 
+              - "0"
+              - !GetAtt 
+                - ExecuteApiVpcEp
+                - DnsEntries
+        DNSName: !Select 
+          - "1"
+          - !Split 
+            - ":"
+            - !Select 
+              - "0"
+              - !GetAtt 
+                - ExecuteApiVpcEp
+                - DnsEntries
 
 # ╔═══════════════════════════════════════════════════════════════════════════════════════════════╗
 # ║ Outputs                                                                                       ║
