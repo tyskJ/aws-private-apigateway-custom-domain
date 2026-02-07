@@ -641,15 +641,15 @@ Resources:
         - Key: Name
           Value: rest-api
 
-#   ############################################################
-#   # Resource - Any Path
-#   ############################################################
-#   ApiResource:
-#     Type: AWS::ApiGateway::Resource
-#     Properties:
-#       RestApiId: !Ref RestApi
-#       ParentId: !GetAtt RestApi.RootResourceId
-#       PathPart: "{proxy+}"
+  ############################################################
+  # Resource - Any Path
+  ############################################################
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PrivateRestApi
+      ParentId: !GetAtt PrivateRestApi.RootResourceId
+      PathPart: "{proxy+}"
 
 #   ############################################################
 #   # Method - VPC Link
