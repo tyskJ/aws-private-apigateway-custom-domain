@@ -520,6 +520,9 @@ Resources:
           SecurityGroupIds:
             - !Ref VpcEndpointSg
           PrivateDnsEnabled: !FindInMap [InterfaceEpParams, !Ref InterfaceEpVariable, DnsEnable]
+          Tags:
+            - Key: Name
+              Value: !FindInMap [InterfaceEpParams, !Ref InterfaceEpVariable, Name]
 
   ############################################################
   # ALB
