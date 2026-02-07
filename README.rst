@@ -125,3 +125,4 @@ API Gateway (Private REST API) をカスタムドメインで構築
 * `API GatewayをCloudFormationで構築したら、マネコンとの項目の関連がわからなすぎたので、二度と調べなくていいようにまとめました - DevelopersIO <https://dev.classmethod.jp/articles/put-together-about-the-relationship-between-cfn-and-management-console-items/>`_
 * `[アップデート] REST APIのAPI Gatewayのプライベート統合でALBを直接指定できるようになりました <https://dev.classmethod.jp/articles/api-gateway-rest-apis-integration-load-balancer/>`_
 * `Amazon API Gateway のプライベート REST API でカスタムドメインが使えるようになっていたので設定してみた - DevelopersIO <https://dev.classmethod.jp/articles/api-gateway-custom-domain-name-private-rest/>`_
+* `Amazon API Gateway は何をしてるのか - DevelopersIO <https://dev.classmethod.jp/articles/what-does-amazon-api-gateway-do/>`_
