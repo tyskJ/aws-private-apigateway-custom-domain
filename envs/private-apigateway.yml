@@ -25,6 +25,10 @@ Metadata:
           default: EC2 Settings
         Parameters:
           - LatestAmiId
+  cfn-lint:
+    config:
+      ignore_checks:
+        - E3002
 
 # ╔═══════════════════════════════════════════════════════════════════════════════════════════════╗
 # ║ Parameters                                                                                    ║
@@ -605,11 +609,6 @@ Resources:
   ############################################################
   PrivateRestApi:
     Type: AWS::ApiGateway::RestApi
-    Metadata:
-      cfn-lint:
-        config:
-          ignore_checks:
-            - E3002
     Properties:
       Name: private-rest-api
       Description: Test Private Rest API (Any)
@@ -651,8 +650,38 @@ Resources:
       ParentId: !GetAtt PrivateRestApi.RootResourceId
       PathPart: "{proxy+}"
 
+  ############################################################
+  # Method - VPC Link
+  ############################################################
+  AnyMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PrivateRestApi
+      ResourceId: !Ref ApiResource
+      HttpMethod: ANY
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      # Method request
+      RequestParameters:
+        method.request.path.proxy: true
+      # Integration request & response
+      Integration:
+        Type: HTTP_PROXY
+        IntegrationHttpMethod: ANY
+        ConnectionType: VPC_LINK
+        ConnectionId: !Ref VpcLinkV2
+        IntegrationTarget: !Ref Alb
+        Uri: !Sub "http://${Alb.DNSName}/"
+        RequestParameters:
+          integration.request.path.proxy: method.request.path.proxy
+      # Method response
+      MethodResponses:
+        - StatusCode: 200
+          ResponseModels:
+            application/json: Empty
+
 #   ############################################################
-#   # Method - VPC Link
+#   # Stage
 #   ############################################################
 
 #   ############################################################
