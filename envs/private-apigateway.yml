@@ -444,6 +444,7 @@ Resources:
             "Version": "2012-10-17",
             "Statement": [
                 {
+                    "Sid": "ForEC2",
                     "Effect": "Allow",
                     "Principal": {
                         "Service": "ec2.amazonaws.com"
@@ -457,6 +458,31 @@ Resources:
       Tags:
         - Key: Name
           Value: iam-role-ec2
+
+  ApiGatwayRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: For API Gateway Role
+      RoleName: iam-role-apigateway
+      AssumeRolePolicyDocument:
+        {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "ForAPIGateway",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": "apigateway.amazonaws.com"
+                    },
+                    "Action": "sts:AssumeRole"
+                }
+            ]
+        }
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+      Tags:
+        - Key: Name
+          Value: iam-role-apigateway
 
   ############################################################
   # Instance Profile
