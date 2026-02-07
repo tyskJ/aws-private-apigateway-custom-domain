@@ -657,6 +657,19 @@ Resources:
         - Key: Name
           Value: api-gateway-accesslog-loggroup
 
+  CwlogsApiGatewayExecutionLog:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DeletionProtectionEnabled: false
+      LogGroupClass: STANDARD
+      LogGroupName: !Sub "API-Gateway-Execution-Logs_${PrivateRestApi.RestApiId}"
+      RetentionInDays: 7
+      Tags: 
+        - Key: Name
+          Value: !Sub "API-Gateway-Execution-Logs_${PrivateRestApi.RestApiId}"
+
   ############################################################
   # API Gateway
   ############################################################
@@ -759,6 +772,27 @@ Resources:
           - "Deployment${number}"
           - number: !Ref StageVersion
       StageName: !FindInMap [ApiParams, Stage, Name]
+      MethodSettings:
+        - HttpMethod: "*"
+          ResourcePath: "/*"
+          LoggingLevel: INFO
+          MetricsEnabled: true
+          DataTraceEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt CwlogsApiGatewayAccessLog.Arn
+        Format: 
+          Fn::ToJsonString:
+            "requestId": "$context.requestId"
+            "ip": "$context.identity.sourceIp"
+            "caller": "$context.identity.caller"
+            "user": "$context.identity.user"
+            "requestTime": "$context.requestTime"
+            "httpMethod": "$context.httpMethod"
+            "resourcePath": "$context.resourcePath"
+            "status": "$context.status"
+            "errorMessage": "$context.error.message"
+            "protocol": "$context.protocol"
+            "responseLength": "$context.responseLength"
       Tags:
         - Key: Name
           Value: !FindInMap [ApiParams, Stage, Name]
