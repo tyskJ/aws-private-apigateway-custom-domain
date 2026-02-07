@@ -631,6 +631,14 @@ Resources:
         Name: vpc-link-v2
 
   ############################################################
+  # API Gateway IAM Role
+  ############################################################
+  ApiGatwaySettings:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt ApiGatwayRole.Arn
+
+  ############################################################
   # API Gateway
   ############################################################
   PrivateRestApi:
