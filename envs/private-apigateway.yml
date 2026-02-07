@@ -639,6 +639,22 @@ Resources:
       CloudWatchRoleArn: !GetAtt ApiGatwayRole.Arn
 
   ############################################################
+  # CloudWatch Logs
+  ############################################################
+  CwlogsApiGatewayAccessLog:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      DeletionProtectionEnabled: false
+      LogGroupClass: STANDARD
+      LogGroupName: api-gateway-accesslog-loggroup
+      RetentionInDays: 7
+      Tags: 
+        - Key: Name
+          Value: api-gateway-accesslog-loggroup
+
+  ############################################################
   # API Gateway
   ############################################################
   PrivateRestApi:
