@@ -21,6 +21,7 @@ Metadata:
           default: API Gatway Settings
         Parameters:
           - DeploymentTrigger
+          - StageVersion
       - Label:
           default: EC2 Settings
         Parameters:
@@ -42,9 +43,11 @@ Parameters:
     Description: API Gateway Custom Domain Name
     Type: String
   DeploymentTrigger:
-    Description: Change this value to force API redeployment
+    Description: API deployment Version
+    Type: CommaDelimitedList
+  StageVersion:
+    Description: Change Deployment Version Association to Stage
     Type: String
-    Default: v1
   LatestAmiId:
     Description: Latest Amazon Linux 2023 AMI ID.
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
@@ -730,13 +733,35 @@ Resources:
           ResponseModels:
             application/json: Empty
 
-#   ############################################################
-#   # Stage
-#   ############################################################
+  ############################################################
+  # Deployment
+  ############################################################
+  "Fn::ForEach::Deployment":
+    - DeploymentVariable
+    - !Ref DeploymentTrigger
+    - Deployment${DeploymentVariable}:
+        Type: AWS::ApiGateway::Deployment
+        DependsOn:
+          - AnyMethod
+        Properties:
+          RestApiId: !Ref PrivateRestApi
+          Description: !Sub "deployment-${DeploymentVariable}"
 
-#   ############################################################
-#   # Deployment
-#   ############################################################
+  ############################################################
+  # Stage
+  ############################################################
+  ProdStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref PrivateRestApi
+      DeploymentId: !Ref
+        Fn::Sub:
+          - "Deployment${number}"
+          - number: !Ref StageVersion
+      StageName: !FindInMap [ApiParams, Stage, Name]
+      Tags:
+        - Key: Name
+          Value: !FindInMap [ApiParams, Stage, Name]
 
 #   ############################################################
 #   # ACM
