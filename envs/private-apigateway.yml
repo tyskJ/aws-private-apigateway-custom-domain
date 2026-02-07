@@ -600,42 +600,46 @@ Resources:
       Tags:
         Name: vpc-link-v2
 
-#   ############################################################
-#   # API Gateway
-#   ############################################################
-#   RestApi:
-#     Type: AWS::ApiGateway::RestApi
-#     Properties:
-#       Name: rest-api
-#       Description: Test Rest API (Any)
-#       EndpointConfiguration:
-#         IpAddressType: ipv4
-#         Types:
-#           - REGIONAL
-#       SecurityPolicy: SecurityPolicy_TLS13_1_3_2025_09
-#       EndpointAccessMode: STRICT # or BASIC
-#       ApiKeySourceType: HEADER # X-API-Key
-#       DisableExecuteApiEndpoint: true
-#       Policy:
-#         {
-#           "Version": "2012-10-17",
-#           "Statement": [
-#             {
-#               "Effect": "Allow",
-#               "Principal": "*",
-#               "Action": "execute-api:Invoke",
-#               "Resource": ["execute-api:/*"],
-#               "Condition": {
-#                 "IpAddress": {
-#                   "aws:SourceIp": !Ref AccessIp
-#                 }
-#               }
-#             }
-#           ]
-#         }
-#       Tags:
-#         - Key: Name
-#           Value: rest-api
+  ############################################################
+  # API Gateway
+  ############################################################
+  PrivateRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - E3002
+    Properties:
+      Name: private-rest-api
+      Description: Test Private Rest API (Any)
+      EndpointConfiguration:
+        IpAddressType: dualstack
+        Types:
+          - PRIVATE
+        VpcEndpointIds:
+          - !Ref ExecuteApiVpcEp
+      SecurityPolicy: SecurityPolicy_TLS13_1_3_2025_09
+      EndpointAccessMode: STRICT
+      ApiKeySourceType: HEADER # X-API-Key
+      DisableExecuteApiEndpoint: true
+      Policy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: 'execute-api:Invoke'
+            Resource: 'execute-api:/*'
+            Condition:
+              StringNotEquals:
+                'aws:SourceVpce': !Ref ExecuteApiVpcEp
+          - Effect: Allow
+            Principal: '*'
+            Action: 'execute-api:Invoke'
+            Resource: 'execute-api:/*'
+      Tags:
+        - Key: Name
+          Value: rest-api
 
 #   ############################################################
 #   # Resource - Any Path
