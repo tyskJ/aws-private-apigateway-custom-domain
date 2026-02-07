@@ -763,25 +763,66 @@ Resources:
         - Key: Name
           Value: !FindInMap [ApiParams, Stage, Name]
 
-#   ############################################################
-#   # ACM
-#   ############################################################
-#   ApiCertificate:
-#     Type: AWS::CertificateManager::Certificate
-#     Properties:
-#       DomainName: !Ref Fqdn
-#       KeyAlgorithm: EC_prime256v1
-#       ValidationMethod: DNS
-#       DomainValidationOptions:
-#         - DomainName: !Ref Fqdn
-#           HostedZoneId: !Ref HostedZoneId
-#       Tags:
-#         - Key: Name
-#           Value: !Ref Fqdn
+  ############################################################
+  # ACM
+  ############################################################
+  ApiCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref Fqdn
+      KeyAlgorithm: EC_prime256v1
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref Fqdn
+          HostedZoneId: !Ref HostedZoneId
+      Tags:
+        - Key: Name
+          Value: !Ref Fqdn
 
-#   ############################################################
-#   # Custom Domain
-#   ############################################################
+  ############################################################
+  # Custom Domain
+  ############################################################
+  PrivateDomainName:
+    Type: AWS::ApiGateway::DomainNameV2
+    Properties:
+      DomainName: !Ref Fqdn
+      RoutingMode: BASE_PATH_MAPPING_ONLY
+      EndpointConfiguration:
+        Types:
+          - PRIVATE
+      Policy:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: Deny
+              Principal: '*'
+              Action: 'execute-api:Invoke'
+              Resource: 'execute-api:/*'
+              Condition:
+                StringNotEquals:
+                  'aws:SourceVpce': !Ref ExecuteApiVpcEp
+            - Effect: Allow
+              Principal: '*'
+              Action: 'execute-api:Invoke'
+              Resource: 'execute-api:/*'
+      CertificateArn: !Ref ApiCertificate
+      SecurityPolicy: TLS_1_2
+
+  PrivateBasePathMapping:
+    Type: AWS::ApiGateway::BasePathMappingV2
+    Properties:
+      DomainNameArn: !GetAtt PrivateDomainName.DomainNameArn
+      RestApiId: !Ref PrivateRestApi
+      Stage: !Ref ProdStage
+
+  DomainNameAccessAssociation: 
+    Type: AWS::ApiGateway::DomainNameAccessAssociation
+    Properties:
+      AccessAssociationSourceType: VPCE
+      AccessAssociationSource: !Ref ExecuteApiVpcEp
+      DomainNameArn: !GetAtt PrivateDomainName.DomainNameArn
+      Tags:
+        - Key: Name
+          Value: domain-association-vpcendpoints
 
 #   ############################################################
 #   # Record
