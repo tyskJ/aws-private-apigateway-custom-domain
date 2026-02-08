@@ -894,11 +894,17 @@ Resources:
 Outputs:
   GetKeyPairCommand:
     Description: Get KeyPair Secret Key from SSM Parameter Store.
-    Value: !Sub 'aws ssm get-parameter --name "/ec2/keypair/${KeyPair.KeyPairId}:1" --region ${AWS::Region} --with-decryption --query Parameter.Value --output text --profile admin > keypair.pem && chmod 400 keypair.pem'
+    Value: !Sub |
+      aws ssm get-parameter \
+      --name "/ec2/keypair/${KeyPair.KeyPairId}:1" --region ${AWS::Region} \
+      --with-decryption --query Parameter.Value \
+      --output text --profile admin > keypair.pem && chmod 400 keypair.pem
     Export:
       Name: get-keypair-command
   SshCommand:
     Description: SSH Command Bypass Systems Manager Session Manager
-    Value: !Sub 'ssh -i keypair.pem ec2-user@${Client}'
+    Value: !Sub |
+      ssh -i keypair.pem ec2-user@${Client} \
+      -o ProxyCommand="aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters 'portNumber=%p' --profile admin"
     Export:
       Name: ssh-command
