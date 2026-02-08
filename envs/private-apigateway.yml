@@ -610,7 +610,7 @@ Resources:
       Conditions:
         - Field: host-header
           Values:
-            - !Ref Fqdn
+            - !GetAtt Alb.DNSName
       Actions:
         - Type: fixed-response
           FixedResponseConfig:
