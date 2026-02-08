@@ -664,11 +664,11 @@ Resources:
     Properties:
       DeletionProtectionEnabled: false
       LogGroupClass: STANDARD
-      LogGroupName: !Sub "API-Gateway-Execution-Logs_${PrivateRestApi.RestApiId}"
+      LogGroupName: !Sub "API-Gateway-Execution-Logs_${PrivateRestApi.RestApiId}/${ProdStage}"
       RetentionInDays: 7
       Tags: 
         - Key: Name
-          Value: !Sub "API-Gateway-Execution-Logs_${PrivateRestApi.RestApiId}"
+          Value: !Sub "API-Gateway-Execution-Logs_${PrivateRestApi.RestApiId}/${ProdStage}"
 
   ############################################################
   # API Gateway
