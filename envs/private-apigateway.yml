@@ -664,11 +664,15 @@ Resources:
     Properties:
       DeletionProtectionEnabled: false
       LogGroupClass: STANDARD
-      LogGroupName: !Sub "API-Gateway-Execution-Logs_${PrivateRestApi.RestApiId}/${ProdStage}"
+      LogGroupName: !Sub 
+        - "API-Gateway-Execution-Logs_${PrivateRestApi.RestApiId}/${stage_name}"
+        - stage_name: !FindInMap [ApiParams, Stage, Name]
       RetentionInDays: 7
       Tags: 
         - Key: Name
-          Value: !Sub "API-Gateway-Execution-Logs_${PrivateRestApi.RestApiId}/${ProdStage}"
+          Value: !Sub 
+            - "API-Gateway-Execution-Logs_${PrivateRestApi.RestApiId}/${stage_name}"
+            - stage_name: !FindInMap [ApiParams, Stage, Name]
 
   ############################################################
   # API Gateway
@@ -765,6 +769,8 @@ Resources:
   ############################################################
   ProdStage:
     Type: AWS::ApiGateway::Stage
+    DependsOn: 
+      - CwlogsApiGatewayExecutionLog
     Properties:
       RestApiId: !Ref PrivateRestApi
       DeploymentId: !Ref
